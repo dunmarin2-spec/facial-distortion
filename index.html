@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 얼토당토않은 부드러운 스무딩 왜곡 필터</title>
+    <title>형님의 진짜 얼굴 왜곡 필터 (수학 오류 수정완료!)</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
@@ -18,12 +18,12 @@
 </head>
 <body>
 
-    <h2>😎 형님표 부드러운 얼굴 왜곡 필터 (v2) 😎</h2>
+    <h2>😎 형님표 진짜 얼굴 왜곡 필터 (오류 수정) 😎</h2>
     
     <div class="controls">
-        <button id="bigEyes" class="active">왕눈이</button>
-        <button id="longMouth">대왕 입술</button>
-        <button id="alienFace">외계인 얼굴</button>
+        <button id="bigEyes" class="active">진짜 왕눈이</button>
+        <button id="longMouth">진짜 대왕 입술</button>
+        <button id="alienFace">진짜 외계인</button>
     </div>
 
     <video id="input_video" style="display: none;" autoplay playsinline></video>
@@ -44,12 +44,12 @@
             });
         });
 
-        // **핵심: 경계면을 부드럽게 처리하는 업그레이드된 렌즈 효과 함수**
-        function applyLensEffectSmooth(imageData, centerX, centerY, radius, baseStrength) {
+        // 수학 공식을 거꾸로 써서 죄송합니다! 정상적인 렌즈 효과로 수정했습니다.
+        function applyLensEffect(imageData, centerX, centerY, radius, strength) {
             const width = imageData.width;
             const height = imageData.height;
-            const srcPixels = new Uint8Array(imageData.data); // 원본 데이터 복사
-            const dstPixels = imageData.data; // 결과 데이터
+            const srcData = new Uint8ClampedArray(imageData.data); // 원본 복사
+            const dstData = imageData.data; // 화면에 그릴 결과
 
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
@@ -57,35 +57,24 @@
                     const dy = y - centerY;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
-                    if (distance < radius) {
-                        // 거리 비율 (0~1)
+                    if (distance < radius && distance > 0) {
                         const normDist = distance / radius;
                         
-                        // **추가된 스무딩 함수: 중심점에서 멀어질수록 strength가 부드럽게 감소**
-                        // 중심점(normDist=0)에서는 baseStrength, 반경(normDist=1)에서는 1.0(왜곡 없음)에 수렴
-                        const smoothingFactor = Math.pow(1 - normDist, 2); // 중심에서 멀어질수록 0에 수렴
-                        const finalStrength = baseStrength * smoothingFactor + (1 - smoothingFactor);
+                        // 핵심 수정: strength가 1보다 크면 볼록(확대), 1보다 작으면 오목(축소/뾰족하게)
+                        const srcNormDist = Math.pow(normDist, strength);
+                        const srcDistance = srcNormDist * radius;
 
-                        let distortion;
-                        if (finalStrength < 1) {
-                            distortion = Math.pow(normDist, finalStrength); 
-                        } else {
-                            distortion = 1 + (finalStrength - 1) * (1 - Math.pow(normDist, 2));
-                        }
+                        const srcX = Math.round(centerX + (dx / distance) * srcDistance);
+                        const srcY = Math.round(centerY + (dy / distance) * srcDistance);
 
-                        const srcX = Math.round(centerX + dx * distortion / normDist);
-                        const srcY = Math.round(centerY + dy * distortion / normDist);
-
-                        const clampedSrcX = Math.max(0, Math.min(width - 1, srcX));
-                        const clampedSrcY = Math.max(0, Math.min(height - 1, srcY));
-
-                        const dstIdx = (y * width + x) * 4;
-                        const srcIdx = (clampedSrcY * width + clampedSrcX) * 4;
-                        
-                        // 픽셀 보간(Antialiasing)은 구현이 너무 복잡하므로, 
-                        // 대신 부드러운 왜곡 함수로 대체했습니다.
-                        for (let i = 0; i < 4; i++) {
-                            dstPixels[dstIdx + i] = srcPixels[srcIdx + i];
+                        // 캔버스 범위를 벗어나지 않게 안전 처리
+                        if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
+                            const dstIdx = (y * width + x) * 4;
+                            const srcIdx = (srcY * width + srcX) * 4;
+                            dstData[dstIdx] = srcData[srcIdx];         // R
+                            dstData[dstIdx + 1] = srcData[srcIdx + 1]; // G
+                            dstData[dstIdx + 2] = srcData[srcIdx + 2]; // B
+                            dstData[dstIdx + 3] = srcData[srcIdx + 3]; // Alpha
                         }
                     }
                 }
@@ -101,21 +90,27 @@
                 const h = canvasElement.height;
                 const imageData = canvasCtx.getImageData(0, 0, w, h);
 
+                // 눈동자 정중앙(468, 473)과 입술 정중앙(13), 턱끝(152) 좌표를 정확히 잡습니다.
+                const leftEye = landmarks[468] || landmarks[159];
+                const rightEye = landmarks[473] || landmarks[386];
+                const mouth = landmarks[13];
+                const chin = landmarks[152] || landmarks[199];
+
                 switch (currentDistortionType) {
                     case 'bigEyes':
-                        // 눈 확대 (오목 렌즈 효과): baseStrength 0.3으로 설정하고 반경 조절
-                        applyLensEffectSmooth(imageData, landmarks[159].x * w, landmarks[159].y * h, 70, 0.3); // 왼쪽 눈
-                        applyLensEffectSmooth(imageData, landmarks[386].x * w, landmarks[386].y * h, 70, 0.3); // 오른쪽 눈
+                        // strength 2.5 (1보다 크면 확대)
+                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 80, 2.5);
+                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 80, 2.5);
                         break;
                     case 'longMouth':
-                        // 입 확대 (오목 렌즈 효과)
-                        applyLensEffectSmooth(imageData, landmarks[13].x * w, landmarks[13].y * h, 100, 0.4);
+                        // 입술을 엄청 크게 확대
+                        applyLensEffect(imageData, mouth.x * w, mouth.y * h, 100, 2.5);
                         break;
                     case 'alienFace':
-                        applyLensEffectSmooth(imageData, landmarks[159].x * w, landmarks[159].y * h, 60, 0.4);
-                        applyLensEffectSmooth(imageData, landmarks[386].x * w, landmarks[386].y * h, 60, 0.4);
-                        // 턱 좁히기 (볼록 렌즈 효과): baseStrength 1.4
-                        applyLensEffectSmooth(imageData, landmarks[199].x * w, landmarks[199].y * h, 120, 1.4);
+                        // 눈은 크게(2.5), 턱은 외계인처럼 뾰족하게 쭈그러뜨림(0.4)
+                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 90, 2.5); 
+                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 90, 2.5); 
+                        applyLensEffect(imageData, chin.x * w, chin.y * h, 140, 0.4); 
                         break;
                 }
                 canvasCtx.putImageData(imageData, 0, 0);
