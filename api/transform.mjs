@@ -22,20 +22,20 @@ export default async function handler(req, res) {
         if (style === 'webtoon') promptText = "Korean webtoon style, cel shading, clear outlines, dramatic lighting";
         else if (style === 'disney') promptText = "Disney Pixar 3D animation style, cute character, high quality 3D rendering";
 
-const response = await fetch("https://api.replicate.com/v1/models/stability-ai/sdxl/predictions", {
+const response = await fetch("https://api.replicate.com/v1/predictions", {
             method: "POST",
             headers: {
                 "Authorization": `Token ${REPLICATE_API_TOKEN}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                // 🚨 주의: version 줄을 아예 통째로 삭제했습니다! 알아서 최신 버전을 씁니다.
+                // 🚨 전 세계에서 가장 많이 쓰고 절대 안 터지는 SDXL 1.0 공식 버전 ID입니다!
+                version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", 
                 input: {
                     image: image,
                     prompt: promptText,
-                    num_inference_steps: 20, 
-                    guidance_scale: 7.5,
-                    prompt_strength: 0.5 
+                    prompt_strength: 0.5, // 0.5면 원본 얼굴을 적당히 유지하면서 스타일을 입힙니다.
+                    num_inference_steps: 25
                 }
             }),
         });
