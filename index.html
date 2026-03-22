@@ -86,7 +86,7 @@
 
                 // 2. 형님의 폰(브라우저)이 1초마다 직접 상태를 확인합니다. (버셀 우회 완료!)
                 while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-                    await new Promise(r => setTimeout(r, 1000)); // 1초 쉬고
+                    await new Promise(r => setTimeout(r, 3000)); // 1초 쉬고
                     
                     // 화면에 현재 상태를 친절하게 표시해줍니다. (starting, processing 등)
                     loading.innerText = `⏳ AI가 그림을 그리는 중입니다... (상태: ${prediction.status})`;
