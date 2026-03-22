@@ -80,23 +80,31 @@
                 
                 let prediction = await startResponse.json();
 
-                if (prediction.error) {
-                    throw new Error(prediction.error);
+                // 🚨 [수정된 핵심 방어막 1] 첫 주문에서 에러가 났다면 무한루프 안 돌고 여기서 즉시 컷!
+                if (!startResponse.ok || prediction.error) {
+                    let errorMsg = prediction.detail ? JSON.stringify(prediction.detail) : (prediction.error || "알 수 없는 에러");
+                    throw new Error("AI 주문 거절됨: " + errorMsg);
                 }
 
-                // 2. 형님의 폰(브라우저)이 1초마다 직접 상태를 확인합니다. (버셀 우회 완료!)
+                // 2. 형님의 폰(브라우저)이 3초마다 직접 상태를 확인합니다.
                 while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-                    await new Promise(r => setTimeout(r, 3000)); // 1초 쉬고
+                    await new Promise(r => setTimeout(r, 3000)); // 3초 여유
                     
-                    // 화면에 현재 상태를 친절하게 표시해줍니다. (starting, processing 등)
                     loading.innerText = `⏳ AI가 그림을 그리는 중입니다... (상태: ${prediction.status})`;
                     
                     const pollResponse = await fetch('/api/transform', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ predictionId: prediction.id }) // 주문 번호로 확인
+                        body: JSON.stringify({ predictionId: prediction.id }) 
                     });
+                    
                     prediction = await pollResponse.json();
+
+                    // 🚨 [수정된 핵심 방어막 2] 확인 중 에러가 나도 바로 멈춤!
+                    if (!pollResponse.ok) {
+                        let errorMsg = prediction.detail ? JSON.stringify(prediction.detail) : (prediction.error || "알 수 없는 에러");
+                        throw new Error("상태 확인 중 오류: " + errorMsg);
+                    }
                 }
 
                 if (prediction.status === "succeeded") {
@@ -105,11 +113,12 @@
                     retryBtn.style.display = 'block';
                     captureBtn.style.display = 'none';
                 } else {
-                    throw new Error("AI가 그림을 망쳤습니다. 다시 시도해주세요.");
+                    throw new Error("AI가 그림을 망쳤습니다. 다시 시도해주세요. 상태: " + prediction.status);
                 }
 
             } catch (error) {
-                alert("서버 통신 실패! 원인: " + error.message);
+                // 🚨 여기서 "진짜" 원인이 화면에 팝업으로 뜹니다.
+                alert("서버 통신 실패!\n원인: " + error.message);
                 video.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
