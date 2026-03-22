@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 얼굴 왜곡 필터</title>
+    <title>형님의 얼토당토않은 얼굴 왜곡 필터</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
@@ -14,7 +14,7 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
-            background-color: #f0f0f0; /* 배경색은 형님께서 원하시면 언제든 흰색으로 바꿀 수 있습니다! */
+            background-color: #e0e0e0;
         }
         canvas {
             border: 5px solid #333;
@@ -23,12 +23,38 @@
             transform: scaleX(-1); /* 거울처럼 보이게 좌우 반전 */
         }
         h2 { color: #333; font-family: sans-serif; }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            background-color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover { background-color: #f0f0f0; }
+        button.active {
+            background-color: #333;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
 
-    <h2>😎 형님표 왕눈이 필터 작동 중 😎</h2>
+    <h2>😎 형님표 얼토당토않은 얼굴 왜곡 필터 😎</h2>
     
+    <div class="controls">
+        <button id="bigEyes" class="active">왕눈이</button>
+        <button id="longMouth">대왕 입술</button>
+        <button id="alienFace">외계인 얼굴</button>
+        <button id="widenFace">넓적 얼굴</button>
+    </div>
+
     <video id="input_video" style="display: none;" autoplay playsinline></video>
     <canvas id="output_canvas" width="640" height="480"></canvas>
 
@@ -36,25 +62,38 @@
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        let currentDistortionType = 'bigEyes'; // 초기값
 
-        // 눈과 입을 확대해서 그리는 함수
-        function drawDistortedFeature(centerIdx, scale, landmarks, videoWidth, videoHeight) {
+        // 버튼 클릭 이벤트 처리
+        const buttons = document.querySelectorAll('.controls button');
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                // 기존 활성화된 버튼 클래스 제거
+                document.querySelector('.controls button.active').classList.remove('active');
+                // 클릭한 버튼 활성화
+                button.classList.add('active');
+                // 선택된 왜곡 유형 업데이트
+                currentDistortionType = button.id;
+            });
+        });
+
+        // 왜곡 부위를 캔버스에 그리는 함수 (세밀한 제어가 가능하도록 수정)
+        function drawDistortedFeature(centerIdx, scaleX, scaleY, size, landmarks, videoWidth, videoHeight) {
             const pt = landmarks[centerIdx];
             const x = pt.x * videoWidth;
             const y = pt.y * videoHeight;
             
-            // 확대할 영역의 크기 (임의 설정)
-            const size = 100; 
+            // 확대할 영역의 크기
             const sx = Math.max(0, x - size / 2);
             const sy = Math.max(0, y - size / 2);
             const sWidth = size;
             const sHeight = size;
 
-            // 캔버스에 확대해서 덮어 그리기
-            const dx = x - (size * scale) / 2;
-            const dy = y - (size * scale) / 2;
-            const dWidth = size * scale;
-            const dHeight = size * scale;
+            // 캔버스에 확대해서 덮어 그리기 (X, Y 축 확대 비율을 다르게 설정 가능)
+            const dx = x - (size * scaleX) / 2;
+            const dy = y - (size * scaleY) / 2;
+            const dWidth = size * scaleX;
+            const dHeight = size * scaleY;
 
             canvasCtx.drawImage(videoElement, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
         }
@@ -64,20 +103,42 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-            // 2. 얼굴이 인식되었다면 눈과 입을 왜곡(확대) 시킵니다.
+            // 2. 얼굴이 인식되었다면 선택된 왜곡 유형에 따라 다른 로직을 실행합니다.
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
                 const w = canvasElement.width;
                 const h = canvasElement.height;
 
-                // 왼쪽 눈 (대략적인 중심점 159), 오른쪽 눈 (386), 입 (13) 확대 비율 설정
-                const eyeScale = 2.0; // 눈 2배 확대
-                const mouthScale = 1.8; // 입 1.8배 확대
-
-                // 원본 영상 위에 확대된 눈과 입을 잘라 붙입니다.
-                drawDistortedFeature(159, eyeScale, landmarks, w, h); // 왼쪽 눈
-                drawDistortedFeature(386, eyeScale, landmarks, w, h); // 오른쪽 눈
-                drawDistortedFeature(13, mouthScale, landmarks, w, h); // 입
+                // 선택된 왜곡 유형에 따라 다른 로직 실행
+                switch (currentDistortionType) {
+                    case 'bigEyes':
+                        // 눈 확대 비율을 더 극적으로 설정 (2.5배 -> 3.5배)
+                        const eyeScale = 3.5;
+                        drawDistortedFeature(159, eyeScale, eyeScale, 100, landmarks, w, h); // 왼쪽 눈
+                        drawDistortedFeature(386, eyeScale, eyeScale, 100, landmarks, w, h); // 오른쪽 눈
+                        break;
+                    case 'longMouth':
+                        // 입 확대 비율 설정 (위아래로 더 길게 늘림)
+                        const mouthScaleX = 1.0; // 옆으로 늘리지 않음
+                        const mouthScaleY = 3.0; // 위아래로 3배 길게 늘림
+                        drawDistortedFeature(13, mouthScaleX, mouthScaleY, 150, landmarks, w, h); // 입
+                        break;
+                    case 'alienFace':
+                        // 눈을 키우고 턱을 좁힘
+                        const eyeScaleAlien = 3.0;
+                        drawDistortedFeature(159, eyeScaleAlien, eyeScaleAlien, 100, landmarks, w, h); // 왼쪽 눈
+                        drawDistortedFeature(386, eyeScaleAlien, eyeScaleAlien, 100, landmarks, w, h); // 오른쪽 눈
+                        // 턱 랜드마크 (199) 주변을 축소
+                        drawDistortedFeature(199, 0.5, 0.5, 200, landmarks, w, h); // 턱 축소
+                        break;
+                    case 'widenFace':
+                        // 얼굴 전체를 옆으로 넓힘 (캔버스 스케일링 활용)
+                        canvasCtx.save(); // 현재 캔버스 상태 저장
+                        canvasCtx.scale(1.5, 1.0); // X축 1.5배 확대
+                        canvasCtx.drawImage(results.image, 0, 0, w / 1.5, h); // 스케일링된 캔버스에 그리기
+                        canvasCtx.restore(); // 저장된 캔버스 상태 복원
+                        break;
+                }
             }
         }
 
