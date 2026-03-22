@@ -28,18 +28,17 @@ export default async function handler(req, res) {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                // [수정 완료] 가장 빠르고 강력한 SDXL Lightning 최신 버전입니다.
-                version: "616053303666e139967272846f4e1952e47c7c0068a649875f560a6e60b8a0ef", 
-                input: {
-                    image: image, // 형님이 폰으로 찍은 사진
-                    prompt: promptText, // 지브리, 디즈니 등 스타일 명령
-                    width: 768, 
-                    height: 768,
-                    prompt_strength: 0.45, // 이 숫자가 낮을수록 원본 얼굴이 더 많이 남습니다! (0.3~0.5 추천)
-                    num_inference_steps: 8, // 속도를 위해 단계를 줄였습니다. (버셀 10초 컷 방지)
-                    guidance_scale: 1.5
-                }
-            }),
+    // [가장 안정적인 SDXL 모델 버전입니다]
+    version: "7762fd0e0e351637c4701f6613ad79040a8d45151ea22b37805177c4416345a4", 
+    input: {
+        image: image,
+        prompt: promptText,
+        // 아래 설정 이름들이 모델마다 다를 수 있어서 가장 기본만 남깁니다
+        num_inference_steps: 20, 
+        guidance_scale: 7.5,
+        prompt_strength: 0.5 
+    }
+}),
 
         const prediction = await response.json();
         // 기다리지 않고 주문 내역을 바로 브라우저로 던집니다! (버셀 타임아웃 방지)
