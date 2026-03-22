@@ -3,142 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 동적 리액션 엽기 필터</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <title>형님의 AI 사진관</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #ffeb3b; }
-        canvas { border: 5px solid #000; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); transform: scaleX(-1); }
-        h2 { color: #000; font-family: 'Arial Black', sans-serif; text-transform: uppercase; }
-        .controls { margin-bottom: 20px; display: flex; gap: 10px; }
-        button { padding: 12px 24px; font-weight: bold; font-size: 16px; border: 3px solid #000; border-radius: 8px; background-color: #fff; cursor: pointer; transition: 0.1s; box-shadow: 4px 4px 0px #000; }
-        button:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #000; }
-        button.active { background-color: #000; color: #fff; }
-        #instruction { margin-top: 15px; font-size: 18px; font-weight: bold; color: #d32f2f; }
+        body { margin: 0; font-family: 'Pretendard', sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        h1 { color: #333; }
+        .camera-box { position: relative; width: 100%; max-width: 500px; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: #000; }
+        video, img { width: 100%; display: block; }
+        img { display: none; } /* 처음엔 결과 이미지 숨김 */
+        .controls { margin-top: 20px; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 500px; }
+        select, button { padding: 15px; font-size: 16px; border-radius: 10px; border: none; font-weight: bold; }
+        select { background-color: #fff; border: 2px solid #ddd; outline: none; }
+        button { background-color: #4CAF50; color: white; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        button:hover { background-color: #45a049; transform: translateY(-2px); }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        #loading { display: none; text-align: center; color: #666; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <h2>🤪 형님표 대폭소 필터 🤪</h2>
-    
-    <div class="controls">
-        <button id="pufferFish" class="active">복어 (입 벌려보십쇼!)</button>
-        <button id="twoFace">아수라 짝짝이</button>
-        <button id="chinToTop">오이 얼굴</button>
+    <h1>✨ 형님의 마법 AI 사진관 ✨</h1>
+
+    <div class="camera-box">
+        <video id="camera" autoplay playsinline></video>
+        <img id="resultImage" alt="변환된 결과물">
     </div>
 
-    <video id="input_video" style="display: none;" autoplay playsinline></video>
-    <canvas id="output_canvas" width="640" height="480"></canvas>
+    <div class="controls">
+        <select id="styleSelect">
+            <option value="ghibli">🍃 스튜디오 지브리 스타일</option>
+            <option value="webtoon">💬 네이버 K-웹툰 스타일</option>
+            <option value="disney">🏰 디즈니 픽사 3D 스타일</option>
+        </select>
+        
+        <button id="captureBtn">📸 찰칵! AI 변환 시작하기</button>
+        <button id="retryBtn" style="display:none; background-color:#ff5722;">🔄 다시 찍기</button>
+    </div>
     
-    <div id="instruction">👇 화면을 보고 입을 크게 벌려보세요! 👇</div>
+    <div id="loading">🚀 AI가 형님의 사진을 혼신의 힘을 다해 다시 그리는 중입니다... (약 10~15초 소요)</div>
+
+    <canvas id="canvas" style="display: none;"></canvas>
 
     <script>
-        const videoElement = document.getElementById('input_video');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const instruction = document.getElementById('instruction');
-        let currentDistortionType = 'pufferFish';
+        const video = document.getElementById('camera');
+        const resultImage = document.getElementById('resultImage');
+        const captureBtn = document.getElementById('captureBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const styleSelect = document.getElementById('styleSelect');
+        const loading = document.getElementById('loading');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
 
-        const buttons = document.querySelectorAll('.controls button');
-        buttons.forEach(button => {
-            button.addEventListener('click', () => {
-                document.querySelector('.controls button.active').classList.remove('active');
-                button.classList.add('active');
-                currentDistortionType = button.id;
-                
-                // 안내 문구 변경
-                if(button.id === 'pufferFish') instruction.innerText = "👇 입을 쩍 벌려보십쇼! (눈알 튀어나옴) 👇";
-                else if(button.id === 'twoFace') instruction.innerText = "👇 윙크를 해보십쇼! 언밸런스의 극치 👇";
-                else instruction.innerText = "👇 턱을 위아래로 움직여보십쇼! 👇";
-            });
+        // 카메라 켜기
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => alert("카메라 권한을 허용해주세요!"));
+
+        captureBtn.addEventListener('click', async () => {
+            // 1. 캔버스에 현재 영상 캡처
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            
+            // 2. 이미지를 Base64 문자열로 변환 (서버로 보내기 위함)
+            const imageDataUrl = canvas.toDataURL('image/jpeg');
+            const selectedStyle = styleSelect.value;
+
+            // 3. UI 변경 (로딩 중)
+            video.style.display = 'none';
+            resultImage.style.display = 'none';
+            loading.style.display = 'block';
+            captureBtn.disabled = true;
+
+            try {
+                // 4. 버셀 서버(api/transform)로 사진과 스타일 정보 전송!
+                const response = await fetch('/api/transform', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageDataUrl, style: selectedStyle })
+                });
+
+                const data = await response.json();
+
+                if(response.ok) {
+                    // 5. 성공 시 결과 이미지 띄우기
+                    resultImage.src = data.outputUrl;
+                    resultImage.style.display = 'block';
+                    retryBtn.style.display = 'block';
+                    captureBtn.style.display = 'none';
+                } else {
+                    alert("에러가 발생했습니다: " + data.error);
+                    video.style.display = 'block';
+                }
+            } catch (error) {
+                alert("서버 통신 실패!");
+                video.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                captureBtn.disabled = false;
+            }
         });
 
-        function applyLensEffect(imageData, centerX, centerY, radius, strength) {
-            const width = imageData.width;
-            const height = imageData.height;
-            const srcData = new Uint8ClampedArray(imageData.data); 
-            const dstData = imageData.data; 
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const dx = x - centerX;
-                    const dy = y - centerY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < radius && distance > 0) {
-                        const normDist = distance / radius;
-                        const srcNormDist = Math.pow(normDist, strength);
-                        const srcDistance = srcNormDist * radius;
-
-                        const srcX = Math.round(centerX + (dx / distance) * srcDistance);
-                        const srcY = Math.round(centerY + (dy / distance) * srcDistance);
-
-                        if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
-                            const dstIdx = (y * width + x) * 4;
-                            const srcIdx = (srcY * width + srcX) * 4;
-                            dstData[dstIdx] = srcData[srcIdx];         
-                            dstData[dstIdx + 1] = srcData[srcIdx + 1]; 
-                            dstData[dstIdx + 2] = srcData[srcIdx + 2]; 
-                            dstData[dstIdx + 3] = srcData[srcIdx + 3]; 
-                        }
-                    }
-                }
-            }
-        }
-
-        function onResults(results) {
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                const landmarks = results.multiFaceLandmarks[0];
-                const w = canvasElement.width;
-                const h = canvasElement.height;
-                const imageData = canvasCtx.getImageData(0, 0, w, h);
-
-                const leftEye = landmarks[159];
-                const rightEye = landmarks[386];
-                
-                // 핵심 기능: 위아래 입술의 거리를 계산하여 '입을 벌린 정도'를 파악합니다.
-                const upperLip = landmarks[13];
-                const lowerLip = landmarks[14];
-                const mouthOpenness = Math.abs(lowerLip.y - upperLip.y) * h; 
-
-                switch (currentDistortionType) {
-                    case 'pufferFish':
-                        // [복어 모드] 입을 벌릴수록 눈이 비정상적으로 튀어나옵니다!
-                        // 입을 다물고 있으면 기본 크기(1.2), 쩍 벌리면 최대 4.0배까지 커짐
-                        const popStrength = 1.2 + (mouthOpenness / 10); 
-                        const popRadius = 60 + mouthOpenness; // 커질수록 영향받는 반경도 넓어짐
-                        
-                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, popRadius, popStrength);
-                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, popRadius, popStrength);
-                        break;
-
-                    case 'twoFace':
-                        // [아수라 모드] 왼쪽은 비정상적으로 크고, 오른쪽은 점처럼 작아집니다.
-                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 120, 3.0); // 왕눈이
-                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 100, 0.3); // 단추구멍
-                        // 입술도 한쪽으로 쏠리게
-                        applyLensEffect(imageData, upperLip.x * w - 30, upperLip.y * h, 80, 2.0); 
-                        break;
-
-                    case 'chinToTop':
-                        // [오이 모드] 턱은 엄청나게 길어지고 눈은 이마 쪽으로 쏠립니다.
-                        const chin = landmarks[152];
-                        applyLensEffect(imageData, chin.x * w, chin.y * h + 50, 200, 2.5); // 턱 주걱턱화
-                        applyLensEffect(imageData, (leftEye.x + rightEye.x)/2 * w, leftEye.y * h - 30, 150, 0.5); // 미간이 빨려들어감
-                        break;
-                }
-                canvasCtx.putImageData(imageData, 0, 0);
-            }
-        }
-
-        const faceMesh = new FaceMesh({locateFile: (file) => { return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`; }});
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        faceMesh.onResults(onResults);
-
-        const camera = new Camera(videoElement, { onFrame: async () => { await faceMesh.send({image: videoElement}); }, width: 640, height: 480 });
-        camera.start();
+        // 다시 찍기 버튼
+        retryBtn.addEventListener('click', () => {
+            resultImage.style.display = 'none';
+            video.style.display = 'block';
+            retryBtn.style.display = 'none';
+            captureBtn.style.display = 'block';
+        });
     </script>
 </body>
 </html>
