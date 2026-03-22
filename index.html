@@ -3,37 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 진짜 얼굴 왜곡 필터 (수학 오류 수정완료!)</title>
+    <title>형님의 동적 리액션 엽기 필터</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #e0e0e0; }
-        canvas { border: 5px solid #333; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transform: scaleX(-1); }
-        h2 { color: #333; font-family: sans-serif; }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #ffeb3b; }
+        canvas { border: 5px solid #000; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); transform: scaleX(-1); }
+        h2 { color: #000; font-family: 'Arial Black', sans-serif; text-transform: uppercase; }
         .controls { margin-bottom: 20px; display: flex; gap: 10px; }
-        button { padding: 10px 20px; font-size: 16px; border: 2px solid #333; border-radius: 5px; background-color: #fff; cursor: pointer; transition: background-color 0.3s; }
-        button:hover { background-color: #f0f0f0; }
-        button.active { background-color: #333; color: #fff; }
+        button { padding: 12px 24px; font-weight: bold; font-size: 16px; border: 3px solid #000; border-radius: 8px; background-color: #fff; cursor: pointer; transition: 0.1s; box-shadow: 4px 4px 0px #000; }
+        button:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px #000; }
+        button.active { background-color: #000; color: #fff; }
+        #instruction { margin-top: 15px; font-size: 18px; font-weight: bold; color: #d32f2f; }
     </style>
 </head>
 <body>
 
-    <h2>😎 형님표 진짜 얼굴 왜곡 필터 (오류 수정) 😎</h2>
+    <h2>🤪 형님표 대폭소 필터 🤪</h2>
     
     <div class="controls">
-        <button id="bigEyes" class="active">진짜 왕눈이</button>
-        <button id="longMouth">진짜 대왕 입술</button>
-        <button id="alienFace">진짜 외계인</button>
+        <button id="pufferFish" class="active">복어 (입 벌려보십쇼!)</button>
+        <button id="twoFace">아수라 짝짝이</button>
+        <button id="chinToTop">오이 얼굴</button>
     </div>
 
     <video id="input_video" style="display: none;" autoplay playsinline></video>
     <canvas id="output_canvas" width="640" height="480"></canvas>
+    
+    <div id="instruction">👇 화면을 보고 입을 크게 벌려보세요! 👇</div>
 
     <script>
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        let currentDistortionType = 'bigEyes';
+        const instruction = document.getElementById('instruction');
+        let currentDistortionType = 'pufferFish';
 
         const buttons = document.querySelectorAll('.controls button');
         buttons.forEach(button => {
@@ -41,15 +45,19 @@
                 document.querySelector('.controls button.active').classList.remove('active');
                 button.classList.add('active');
                 currentDistortionType = button.id;
+                
+                // 안내 문구 변경
+                if(button.id === 'pufferFish') instruction.innerText = "👇 입을 쩍 벌려보십쇼! (눈알 튀어나옴) 👇";
+                else if(button.id === 'twoFace') instruction.innerText = "👇 윙크를 해보십쇼! 언밸런스의 극치 👇";
+                else instruction.innerText = "👇 턱을 위아래로 움직여보십쇼! 👇";
             });
         });
 
-        // 수학 공식을 거꾸로 써서 죄송합니다! 정상적인 렌즈 효과로 수정했습니다.
         function applyLensEffect(imageData, centerX, centerY, radius, strength) {
             const width = imageData.width;
             const height = imageData.height;
-            const srcData = new Uint8ClampedArray(imageData.data); // 원본 복사
-            const dstData = imageData.data; // 화면에 그릴 결과
+            const srcData = new Uint8ClampedArray(imageData.data); 
+            const dstData = imageData.data; 
 
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
@@ -59,22 +67,19 @@
 
                     if (distance < radius && distance > 0) {
                         const normDist = distance / radius;
-                        
-                        // 핵심 수정: strength가 1보다 크면 볼록(확대), 1보다 작으면 오목(축소/뾰족하게)
                         const srcNormDist = Math.pow(normDist, strength);
                         const srcDistance = srcNormDist * radius;
 
                         const srcX = Math.round(centerX + (dx / distance) * srcDistance);
                         const srcY = Math.round(centerY + (dy / distance) * srcDistance);
 
-                        // 캔버스 범위를 벗어나지 않게 안전 처리
                         if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
                             const dstIdx = (y * width + x) * 4;
                             const srcIdx = (srcY * width + srcX) * 4;
-                            dstData[dstIdx] = srcData[srcIdx];         // R
-                            dstData[dstIdx + 1] = srcData[srcIdx + 1]; // G
-                            dstData[dstIdx + 2] = srcData[srcIdx + 2]; // B
-                            dstData[dstIdx + 3] = srcData[srcIdx + 3]; // Alpha
+                            dstData[dstIdx] = srcData[srcIdx];         
+                            dstData[dstIdx + 1] = srcData[srcIdx + 1]; 
+                            dstData[dstIdx + 2] = srcData[srcIdx + 2]; 
+                            dstData[dstIdx + 3] = srcData[srcIdx + 3]; 
                         }
                     }
                 }
@@ -90,27 +95,38 @@
                 const h = canvasElement.height;
                 const imageData = canvasCtx.getImageData(0, 0, w, h);
 
-                // 눈동자 정중앙(468, 473)과 입술 정중앙(13), 턱끝(152) 좌표를 정확히 잡습니다.
-                const leftEye = landmarks[468] || landmarks[159];
-                const rightEye = landmarks[473] || landmarks[386];
-                const mouth = landmarks[13];
-                const chin = landmarks[152] || landmarks[199];
+                const leftEye = landmarks[159];
+                const rightEye = landmarks[386];
+                
+                // 핵심 기능: 위아래 입술의 거리를 계산하여 '입을 벌린 정도'를 파악합니다.
+                const upperLip = landmarks[13];
+                const lowerLip = landmarks[14];
+                const mouthOpenness = Math.abs(lowerLip.y - upperLip.y) * h; 
 
                 switch (currentDistortionType) {
-                    case 'bigEyes':
-                        // strength 2.5 (1보다 크면 확대)
-                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 80, 2.5);
-                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 80, 2.5);
+                    case 'pufferFish':
+                        // [복어 모드] 입을 벌릴수록 눈이 비정상적으로 튀어나옵니다!
+                        // 입을 다물고 있으면 기본 크기(1.2), 쩍 벌리면 최대 4.0배까지 커짐
+                        const popStrength = 1.2 + (mouthOpenness / 10); 
+                        const popRadius = 60 + mouthOpenness; // 커질수록 영향받는 반경도 넓어짐
+                        
+                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, popRadius, popStrength);
+                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, popRadius, popStrength);
                         break;
-                    case 'longMouth':
-                        // 입술을 엄청 크게 확대
-                        applyLensEffect(imageData, mouth.x * w, mouth.y * h, 100, 2.5);
+
+                    case 'twoFace':
+                        // [아수라 모드] 왼쪽은 비정상적으로 크고, 오른쪽은 점처럼 작아집니다.
+                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 120, 3.0); // 왕눈이
+                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 100, 0.3); // 단추구멍
+                        // 입술도 한쪽으로 쏠리게
+                        applyLensEffect(imageData, upperLip.x * w - 30, upperLip.y * h, 80, 2.0); 
                         break;
-                    case 'alienFace':
-                        // 눈은 크게(2.5), 턱은 외계인처럼 뾰족하게 쭈그러뜨림(0.4)
-                        applyLensEffect(imageData, leftEye.x * w, leftEye.y * h, 90, 2.5); 
-                        applyLensEffect(imageData, rightEye.x * w, rightEye.y * h, 90, 2.5); 
-                        applyLensEffect(imageData, chin.x * w, chin.y * h, 140, 0.4); 
+
+                    case 'chinToTop':
+                        // [오이 모드] 턱은 엄청나게 길어지고 눈은 이마 쪽으로 쏠립니다.
+                        const chin = landmarks[152];
+                        applyLensEffect(imageData, chin.x * w, chin.y * h + 50, 200, 2.5); // 턱 주걱턱화
+                        applyLensEffect(imageData, (leftEye.x + rightEye.x)/2 * w, leftEye.y * h - 30, 150, 0.5); // 미간이 빨려들어감
                         break;
                 }
                 canvasCtx.putImageData(imageData, 0, 0);
