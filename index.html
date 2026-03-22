@@ -3,56 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 얼토당토않은 얼굴 왜곡 필터</title>
+    <title>형님의 얼토당토않은 부드러운 스무딩 왜곡 필터</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
-        body {
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #e0e0e0;
-        }
-        canvas {
-            border: 5px solid #333;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            transform: scaleX(-1); /* 거울처럼 보이게 좌우 반전 */
-        }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #e0e0e0; }
+        canvas { border: 5px solid #333; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transform: scaleX(-1); }
         h2 { color: #333; font-family: sans-serif; }
-        .controls {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            border: 2px solid #333;
-            border-radius: 5px;
-            background-color: #fff;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; }
+        button { padding: 10px 20px; font-size: 16px; border: 2px solid #333; border-radius: 5px; background-color: #fff; cursor: pointer; transition: background-color 0.3s; }
         button:hover { background-color: #f0f0f0; }
-        button.active {
-            background-color: #333;
-            color: #fff;
-        }
+        button.active { background-color: #333; color: #fff; }
     </style>
 </head>
 <body>
 
-    <h2>😎 형님표 얼토당토않은 얼굴 왜곡 필터 😎</h2>
+    <h2>😎 형님표 부드러운 얼굴 왜곡 필터 (v2) 😎</h2>
     
     <div class="controls">
         <button id="bigEyes" class="active">왕눈이</button>
         <button id="longMouth">대왕 입술</button>
         <button id="alienFace">외계인 얼굴</button>
-        <button id="widenFace">넓적 얼굴</button>
     </div>
 
     <video id="input_video" style="display: none;" autoplay playsinline></video>
@@ -62,106 +33,100 @@
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        let currentDistortionType = 'bigEyes'; // 초기값
+        let currentDistortionType = 'bigEyes';
 
-        // 버튼 클릭 이벤트 처리
         const buttons = document.querySelectorAll('.controls button');
         buttons.forEach(button => {
             button.addEventListener('click', () => {
-                // 기존 활성화된 버튼 클래스 제거
                 document.querySelector('.controls button.active').classList.remove('active');
-                // 클릭한 버튼 활성화
                 button.classList.add('active');
-                // 선택된 왜곡 유형 업데이트
                 currentDistortionType = button.id;
             });
         });
 
-        // 왜곡 부위를 캔버스에 그리는 함수 (세밀한 제어가 가능하도록 수정)
-        function drawDistortedFeature(centerIdx, scaleX, scaleY, size, landmarks, videoWidth, videoHeight) {
-            const pt = landmarks[centerIdx];
-            const x = pt.x * videoWidth;
-            const y = pt.y * videoHeight;
-            
-            // 확대할 영역의 크기
-            const sx = Math.max(0, x - size / 2);
-            const sy = Math.max(0, y - size / 2);
-            const sWidth = size;
-            const sHeight = size;
+        // **핵심: 경계면을 부드럽게 처리하는 업그레이드된 렌즈 효과 함수**
+        function applyLensEffectSmooth(imageData, centerX, centerY, radius, baseStrength) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const srcPixels = new Uint8Array(imageData.data); // 원본 데이터 복사
+            const dstPixels = imageData.data; // 결과 데이터
 
-            // 캔버스에 확대해서 덮어 그리기 (X, Y 축 확대 비율을 다르게 설정 가능)
-            const dx = x - (size * scaleX) / 2;
-            const dy = y - (size * scaleY) / 2;
-            const dWidth = size * scaleX;
-            const dHeight = size * scaleY;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const dx = x - centerX;
+                    const dy = y - centerY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-            canvasCtx.drawImage(videoElement, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
-        }
+                    if (distance < radius) {
+                        // 거리 비율 (0~1)
+                        const normDist = distance / radius;
+                        
+                        // **추가된 스무딩 함수: 중심점에서 멀어질수록 strength가 부드럽게 감소**
+                        // 중심점(normDist=0)에서는 baseStrength, 반경(normDist=1)에서는 1.0(왜곡 없음)에 수렴
+                        const smoothingFactor = Math.pow(1 - normDist, 2); // 중심에서 멀어질수록 0에 수렴
+                        const finalStrength = baseStrength * smoothingFactor + (1 - smoothingFactor);
 
-        function onResults(results) {
-            // 1. 비디오 화면을 캔버스에 꽉 차게 먼저 그립니다.
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        let distortion;
+                        if (finalStrength < 1) {
+                            distortion = Math.pow(normDist, finalStrength); 
+                        } else {
+                            distortion = 1 + (finalStrength - 1) * (1 - Math.pow(normDist, 2));
+                        }
 
-            // 2. 얼굴이 인식되었다면 선택된 왜곡 유형에 따라 다른 로직을 실행합니다.
-            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                const landmarks = results.multiFaceLandmarks[0];
-                const w = canvasElement.width;
-                const h = canvasElement.height;
+                        const srcX = Math.round(centerX + dx * distortion / normDist);
+                        const srcY = Math.round(centerY + dy * distortion / normDist);
 
-                // 선택된 왜곡 유형에 따라 다른 로직 실행
-                switch (currentDistortionType) {
-                    case 'bigEyes':
-                        // 눈 확대 비율을 더 극적으로 설정 (2.5배 -> 3.5배)
-                        const eyeScale = 3.5;
-                        drawDistortedFeature(159, eyeScale, eyeScale, 100, landmarks, w, h); // 왼쪽 눈
-                        drawDistortedFeature(386, eyeScale, eyeScale, 100, landmarks, w, h); // 오른쪽 눈
-                        break;
-                    case 'longMouth':
-                        // 입 확대 비율 설정 (위아래로 더 길게 늘림)
-                        const mouthScaleX = 1.0; // 옆으로 늘리지 않음
-                        const mouthScaleY = 3.0; // 위아래로 3배 길게 늘림
-                        drawDistortedFeature(13, mouthScaleX, mouthScaleY, 150, landmarks, w, h); // 입
-                        break;
-                    case 'alienFace':
-                        // 눈을 키우고 턱을 좁힘
-                        const eyeScaleAlien = 3.0;
-                        drawDistortedFeature(159, eyeScaleAlien, eyeScaleAlien, 100, landmarks, w, h); // 왼쪽 눈
-                        drawDistortedFeature(386, eyeScaleAlien, eyeScaleAlien, 100, landmarks, w, h); // 오른쪽 눈
-                        // 턱 랜드마크 (199) 주변을 축소
-                        drawDistortedFeature(199, 0.5, 0.5, 200, landmarks, w, h); // 턱 축소
-                        break;
-                    case 'widenFace':
-                        // 얼굴 전체를 옆으로 넓힘 (캔버스 스케일링 활용)
-                        canvasCtx.save(); // 현재 캔버스 상태 저장
-                        canvasCtx.scale(1.5, 1.0); // X축 1.5배 확대
-                        canvasCtx.drawImage(results.image, 0, 0, w / 1.5, h); // 스케일링된 캔버스에 그리기
-                        canvasCtx.restore(); // 저장된 캔버스 상태 복원
-                        break;
+                        const clampedSrcX = Math.max(0, Math.min(width - 1, srcX));
+                        const clampedSrcY = Math.max(0, Math.min(height - 1, srcY));
+
+                        const dstIdx = (y * width + x) * 4;
+                        const srcIdx = (clampedSrcY * width + clampedSrcX) * 4;
+                        
+                        // 픽셀 보간(Antialiasing)은 구현이 너무 복잡하므로, 
+                        // 대신 부드러운 왜곡 함수로 대체했습니다.
+                        for (let i = 0; i < 4; i++) {
+                            dstPixels[dstIdx + i] = srcPixels[srcIdx + i];
+                        }
+                    }
                 }
             }
         }
 
-        // 미디어파이프 얼굴 인식 모델 설정
-        const faceMesh = new FaceMesh({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-        }});
-        faceMesh.setOptions({
-            maxNumFaces: 1, // 한 명의 얼굴만 인식
-            refineLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
+        function onResults(results) {
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                const w = canvasElement.width;
+                const h = canvasElement.height;
+                const imageData = canvasCtx.getImageData(0, 0, w, h);
+
+                switch (currentDistortionType) {
+                    case 'bigEyes':
+                        // 눈 확대 (오목 렌즈 효과): baseStrength 0.3으로 설정하고 반경 조절
+                        applyLensEffectSmooth(imageData, landmarks[159].x * w, landmarks[159].y * h, 70, 0.3); // 왼쪽 눈
+                        applyLensEffectSmooth(imageData, landmarks[386].x * w, landmarks[386].y * h, 70, 0.3); // 오른쪽 눈
+                        break;
+                    case 'longMouth':
+                        // 입 확대 (오목 렌즈 효과)
+                        applyLensEffectSmooth(imageData, landmarks[13].x * w, landmarks[13].y * h, 100, 0.4);
+                        break;
+                    case 'alienFace':
+                        applyLensEffectSmooth(imageData, landmarks[159].x * w, landmarks[159].y * h, 60, 0.4);
+                        applyLensEffectSmooth(imageData, landmarks[386].x * w, landmarks[386].y * h, 60, 0.4);
+                        // 턱 좁히기 (볼록 렌즈 효과): baseStrength 1.4
+                        applyLensEffectSmooth(imageData, landmarks[199].x * w, landmarks[199].y * h, 120, 1.4);
+                        break;
+                }
+                canvasCtx.putImageData(imageData, 0, 0);
+            }
+        }
+
+        const faceMesh = new FaceMesh({locateFile: (file) => { return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`; }});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         faceMesh.onResults(onResults);
 
-        // 웹캠 실행 (해상도 640x480)
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await faceMesh.send({image: videoElement});
-            },
-            width: 640,
-            height: 480
-        });
+        const camera = new Camera(videoElement, { onFrame: async () => { await faceMesh.send({image: videoElement}); }, width: 640, height: 480 });
         camera.start();
     </script>
 </body>
