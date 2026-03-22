@@ -22,14 +22,14 @@ export default async function handler(req, res) {
         if (style === 'webtoon') promptText = "Korean webtoon style, cel shading, clear outlines, dramatic lighting";
         else if (style === 'disney') promptText = "Disney Pixar 3D animation style, cute character, high quality 3D rendering";
 
-        const response = await fetch("https://api.replicate.com/v1/predictions", {
+const response = await fetch("https://api.replicate.com/v1/models/stability-ai/sdxl/predictions", {
             method: "POST",
             headers: {
                 "Authorization": `Token ${REPLICATE_API_TOKEN}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                version: "7762fd0e0e351637c4701f6613ad79040a8d45151ea22b37805177c4416345a4", 
+                // 🚨 주의: version 줄을 아예 통째로 삭제했습니다! 알아서 최신 버전을 씁니다.
                 input: {
                     image: image,
                     prompt: promptText,
