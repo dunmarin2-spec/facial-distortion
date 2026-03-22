@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>형님의 AI 사진관</title>
+    <title>형님의 마법 AI 사진관</title>
     <style>
         body { margin: 0; font-family: 'Pretendard', sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         h1 { color: #333; }
         .camera-box { position: relative; width: 100%; max-width: 500px; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: #000; }
         video, img { width: 100%; display: block; }
-        img { display: none; } /* 처음엔 결과 이미지 숨김 */
+        img { display: none; } 
         .controls { margin-top: 20px; display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 500px; }
         select, button { padding: 15px; font-size: 16px; border-radius: 10px; border: none; font-weight: bold; }
         select { background-color: #fff; border: 2px solid #ddd; outline: none; }
         button { background-color: #4CAF50; color: white; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         button:hover { background-color: #45a049; transform: translateY(-2px); }
         button:disabled { background-color: #aaa; cursor: not-allowed; }
-        #loading { display: none; text-align: center; color: #666; font-weight: bold; margin-top: 10px; }
+        #loading { display: none; text-align: center; color: #d32f2f; font-weight: bold; margin-top: 10px; font-size: 18px; }
     </style>
 </head>
 <body>
@@ -39,7 +39,7 @@
         <button id="retryBtn" style="display:none; background-color:#ff5722;">🔄 다시 찍기</button>
     </div>
     
-    <div id="loading">🚀 AI가 형님의 사진을 혼신의 힘을 다해 다시 그리는 중입니다... (약 10~15초 소요)</div>
+    <div id="loading">🚀 대기 중...</div>
 
     <canvas id="canvas" style="display: none;"></canvas>
 
@@ -53,49 +53,63 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // 카메라 켜기
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
             .then(stream => { video.srcObject = stream; })
             .catch(err => alert("카메라 권한을 허용해주세요!"));
 
         captureBtn.addEventListener('click', async () => {
-            // 1. 캔버스에 현재 영상 캡처
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
-            
-            // 2. 이미지를 Base64 문자열로 변환 (서버로 보내기 위함)
             const imageDataUrl = canvas.toDataURL('image/jpeg');
             const selectedStyle = styleSelect.value;
 
-            // 3. UI 변경 (로딩 중)
             video.style.display = 'none';
             resultImage.style.display = 'none';
             loading.style.display = 'block';
+            loading.innerText = "🚀 AI에게 작업 지시 중...";
             captureBtn.disabled = true;
 
             try {
-                // 4. 버셀 서버(api/transform)로 사진과 스타일 정보 전송!
-                const response = await fetch('/api/transform', {
+                // 1. 서버에 사진을 보내서 그림 주문을 넣습니다.
+                const startResponse = await fetch('/api/transform', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image: imageDataUrl, style: selectedStyle })
                 });
+                
+                let prediction = await startResponse.json();
 
-                const data = await response.json();
+                if (prediction.error) {
+                    throw new Error(prediction.error);
+                }
 
-                if(response.ok) {
-                    // 5. 성공 시 결과 이미지 띄우기
-                    resultImage.src = data.outputUrl;
+                // 2. 형님의 폰(브라우저)이 1초마다 직접 상태를 확인합니다. (버셀 우회 완료!)
+                while (prediction.status !== "succeeded" && prediction.status !== "failed") {
+                    await new Promise(r => setTimeout(r, 1000)); // 1초 쉬고
+                    
+                    // 화면에 현재 상태를 친절하게 표시해줍니다. (starting, processing 등)
+                    loading.innerText = `⏳ AI가 그림을 그리는 중입니다... (상태: ${prediction.status})`;
+                    
+                    const pollResponse = await fetch('/api/transform', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ predictionId: prediction.id }) // 주문 번호로 확인
+                    });
+                    prediction = await pollResponse.json();
+                }
+
+                if (prediction.status === "succeeded") {
+                    resultImage.src = prediction.output[0];
                     resultImage.style.display = 'block';
                     retryBtn.style.display = 'block';
                     captureBtn.style.display = 'none';
                 } else {
-                    alert("에러가 발생했습니다: " + data.error);
-                    video.style.display = 'block';
+                    throw new Error("AI가 그림을 망쳤습니다. 다시 시도해주세요.");
                 }
+
             } catch (error) {
-                alert("서버 통신 실패!");
+                alert("서버 통신 실패! 원인: " + error.message);
                 video.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
@@ -103,7 +117,6 @@
             }
         });
 
-        // 다시 찍기 버튼
         retryBtn.addEventListener('click', () => {
             resultImage.style.display = 'none';
             video.style.display = 'block';
