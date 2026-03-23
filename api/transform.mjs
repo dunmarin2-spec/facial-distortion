@@ -47,7 +47,7 @@ export default async function handler(req, res) {
                     negative_prompt: "nsfw, nude, naked, cleavage, bare skin, ugly, deformed, disfigured, low quality, bad anatomy, bad hands, cartoon, low resolution, blurry, overexposed, horror, scary", 
                     
                     // 💡 [형님 팁] 나 같지가 않으면 숫자를 0.4로 내리시고, 만화 느낌이 부족하면 0.6으로 올리십쇼!
-                    prompt_strength: 0.3, 
+                    prompt_strength: 0.35, 
                     
                     num_inference_steps: 25
                 }
